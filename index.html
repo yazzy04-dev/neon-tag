@@ -21,7 +21,7 @@
 <script>
 (()=>{
 const c=document.getElementById('game'),x=c.getContext('2d');x.imageSmoothingEnabled=false;
-const CW=800,CH=500,world={w:2400,h:1800},keys={};let player,cars,traffic,buildings,pedestrians,cache,particles,score,nitro,nitroCD,cam={x:0,y:0,a:-Math.PI/2},last=0,joined=false,room='NEON09',name='GHOST_09',elapsed=0;
+const CW=800,CH=500,world={w:2400,h:1800},keys={};let player,cars,traffic,buildings,pedestrians,cache,particles,score,nitro,nitroCD,cam={x:0,y:0,a:-Math.PI/2},last=0,joined=false,room='NEON09',name='GHOST_09',elapsed=0;\nlet socket=null,remotePlayers=new Map(),netSendTimer=0,tagCooldown=new Map();
 const ui={score:document.getElementById('score'),near:document.getElementById('near'),speed:document.getElementById('speed'),nitro:document.getElementById('nitro'),zone:document.getElementById('zone'),net:document.getElementById('network'),feed:document.getElementById('feed')};
 function rnd(a,b){return a+Math.random()*(b-a)}function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function log(s){let d=document.createElement('div');d.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' // '+s;ui.feed.prepend(d);while(ui.feed.children.length>7)ui.feed.lastChild.remove()}
@@ -255,9 +255,9 @@ function draw(){
  const actors=[];
  for(let t of traffic){let p=project(t.x,t.y,0);if(p.forward>-45&&p.forward<900&&Math.abs(p.lateral)<850)actors.push({o:t,p,kind:'traffic'})}
  for(let r of cars)if(r.alive){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'rival'})}
- for(let ped of pedestrians){let p=project(ped.x,ped.y,0);if(p.forward>-35&&p.forward<700&&Math.abs(p.lateral)<760)actors.push({o:ped,p,kind:'ped'})}
+ for(let r of remotePlayers.values()){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'remote'})}\n for(let ped of pedestrians){let p=project(ped.x,ped.y,0);if(p.forward>-35&&p.forward<700&&Math.abs(p.lateral)<760)actors.push({o:ped,p,kind:'ped'})}
  actors.sort((a,b)=>b.p.forward-a.p.forward);
- for(let a of actors){if(a.kind==='traffic')drawCar3D(a.o,a.o.color,'#342b30');else if(a.kind==='rival'){drawTargetGlow(a.o);drawCar3D(a.o,'#ff40c9','#ffd0f5')}else drawPed3D(a.o)}
+ for(let a of actors){if(a.kind==='traffic')drawCar3D(a.o,a.o.color,'#342b30');else if(a.kind==='rival'){drawTargetGlow(a.o);drawCar3D(a.o,'#ff40c9','#ffd0f5')}else if(a.kind==='remote'){drawCar3D(a.o,'#65f7ff','#d7ffff');const label=project(a.o.x,a.o.y,24);x.fillStyle='#d7ffff';x.font='10px Consolas';x.textAlign='center';x.fillText(a.o.name||'DRIVER',label.x,label.y-5);x.textAlign='left'}else drawPed3D(a.o)}
  // Player car: rear chase-camera view, with a visible roof, rear glass, bumper and tires.
  // The car is drawn in screen space (not as a flat map icon) so it reads as a vehicle on the road.
  const px=CW*.5, py=CH*.765;
@@ -294,13 +294,29 @@ function draw(){
  // Speed HUD vignette and scanlines
  x.globalAlpha=.08;x.fillStyle='#9dfaff';for(let y=0;y<CH;y+=4)x.fillRect(0,y,CW,1);x.globalAlpha=1;
 }
-function frame(t){let dt=Math.min(.035,(t-last)/1000||0);last=t;update(dt);draw();requestAnimationFrame(frame)}
+function frame(t){let dt=Math.min(.035,(t-last)/1000||0);last=t;update(dt);netSendTimer+=dt;if(socket&&socket.readyState===WebSocket.OPEN&&netSendTimer>=.08){netSendTimer=0;socket.send(JSON.stringify({type:'state',x:player.x,y:player.y,a:player.a}));for(const [id,r] of remotePlayers){if(Math.hypot(player.x-r.x,player.y-r.y)<30&&(tagCooldown.get(id)||0)<performance.now()){socket.send(JSON.stringify({type:'tag',target:id}));tagCooldown.set(id,performance.now()+1800);}}}draw();requestAnimationFrame(frame)}
 window.addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys[k]=true;if(k==='r'){reset();log('Respawned at Neon Core.')}});window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 // Hold-to-drive controls work with mouse, touch, pen, and keyboard. Always release on cancel/blur.
 function bindDriveButton(id,key){const el=document.getElementById(id);const press=e=>{e.preventDefault();keys[key]=true;try{el.setPointerCapture(e.pointerId)}catch(_){}};const release=e=>{if(e)e.preventDefault();keys[key]=false;};el.addEventListener('pointerdown',press);['pointerup','pointercancel','lostpointercapture','pointerleave'].forEach(type=>el.addEventListener(type,release));el.addEventListener('contextmenu',e=>e.preventDefault());}
 bindDriveButton('fwd','w');bindDriveButton('rev','s');window.addEventListener('blur',()=>{keys.w=false;keys.s=false;});
-document.getElementById('join').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=(document.getElementById('room').value.trim()||'NEON09').toUpperCase();joined=true;ui.net.textContent='Joined room '+room+' as '+name+'. Local AI session active; no remote players connected.';log(name+' joined room '+room+'.');};
-document.getElementById('host').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=Math.random().toString(36).slice(2,8).toUpperCase();document.getElementById('room').value=room;joined=true;ui.net.textContent='Room '+room+' created locally. Share-code UI demo only — no public server is running.';log(name+' hosted room '+room+'.');};
+function connectToRoom(){
+ if(socket){try{socket.close()}catch(_){}}
+ remotePlayers.clear();
+ ui.net.textContent='Connecting to multiplayer server…';
+ socket=new WebSocket('wss://neon-tag-h4lk.onrender.com/ws');
+ socket.addEventListener('open',()=>{socket.send(JSON.stringify({type:'join',room,name}));ui.net.textContent='Connected — joining room '+room+'…';});
+ socket.addEventListener('message',event=>{
+  let m;try{m=JSON.parse(event.data)}catch(_){return}
+  if(m.type==='welcome'){room=m.room;document.getElementById('room').value=room;remotePlayers.clear();for(const p of (m.players||[]))if(p.id!==m.id)remotePlayers.set(p.id,p);ui.net.textContent='Online · room '+room+' · '+(remotePlayers.size+1)+' driver(s)';log('Connected to online room '+room+'.');}
+  else if(m.type==='players'){const next=new Map();for(const p of (m.players||[]))if(p.id!==m.id)next.set(p.id,p);remotePlayers=next;ui.net.textContent='Online · room '+room+' · '+(remotePlayers.size+1)+' driver(s)';}
+  else if(m.type==='event'&&m.event==='tag'){log(m.by+' tagged '+m.target+'!');}
+  else if(m.type==='tagged'){log('You were tagged by '+m.by+'!');}
+ });
+ socket.addEventListener('error',()=>{ui.net.textContent='Could not connect. Check server status and try again.';});
+ socket.addEventListener('close',()=>{remotePlayers.clear();if(ui.net.textContent.startsWith('Online')||ui.net.textContent.startsWith('Connected'))ui.net.textContent='Disconnected · press JOIN ROOM to reconnect';});
+}
+document.getElementById('join').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=(document.getElementById('room').value.trim()||'NEON09').toUpperCase();joined=true;connectToRoom();};
+document.getElementById('host').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=Math.random().toString(36).slice(2,8).toUpperCase();document.getElementById('room').value=room;joined=true;connectToRoom();};
 document.getElementById('reset').onclick=reset;
 reset();requestAnimationFrame(frame);
 })();
