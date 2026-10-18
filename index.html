@@ -21,7 +21,8 @@
 <script>
 (()=>{
 const c=document.getElementById('game'),x=c.getContext('2d');x.imageSmoothingEnabled=false;
-const CW=800,CH=500,world={w:2400,h:1800},keys={};let player,cars,traffic,buildings,pedestrians,cache,particles,score,nitro,nitroCD,cam={x:0,y:0,a:-Math.PI/2},last=0,joined=false,room='NEON09',name='GHOST_09',elapsed=0;\nlet socket=null,remotePlayers=new Map(),netSendTimer=0,tagCooldown=new Map();
+const CW=800,CH=500,world={w:2400,h:1800},keys={};let player,cars,traffic,buildings,pedestrians,cache,particles,score,nitro,nitroCD,cam={x:0,y:0,a:-Math.PI/2},last=0,joined=false,room='NEON09',name='GHOST_09',elapsed=0;
+let socket=null,remotePlayers=new Map(),netSendTimer=0,tagCooldown=new Map();
 const ui={score:document.getElementById('score'),near:document.getElementById('near'),speed:document.getElementById('speed'),nitro:document.getElementById('nitro'),zone:document.getElementById('zone'),net:document.getElementById('network'),feed:document.getElementById('feed')};
 function rnd(a,b){return a+Math.random()*(b-a)}function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function log(s){let d=document.createElement('div');d.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' // '+s;ui.feed.prepend(d);while(ui.feed.children.length>7)ui.feed.lastChild.remove()}
@@ -255,7 +256,8 @@ function draw(){
  const actors=[];
  for(let t of traffic){let p=project(t.x,t.y,0);if(p.forward>-45&&p.forward<900&&Math.abs(p.lateral)<850)actors.push({o:t,p,kind:'traffic'})}
  for(let r of cars)if(r.alive){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'rival'})}
- for(let r of remotePlayers.values()){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'remote'})}\n for(let ped of pedestrians){let p=project(ped.x,ped.y,0);if(p.forward>-35&&p.forward<700&&Math.abs(p.lateral)<760)actors.push({o:ped,p,kind:'ped'})}
+ for(let r of remotePlayers.values()){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'remote'})}
+ for(let ped of pedestrians){let p=project(ped.x,ped.y,0);if(p.forward>-35&&p.forward<700&&Math.abs(p.lateral)<760)actors.push({o:ped,p,kind:'ped'})}
  actors.sort((a,b)=>b.p.forward-a.p.forward);
  for(let a of actors){if(a.kind==='traffic')drawCar3D(a.o,a.o.color,'#342b30');else if(a.kind==='rival'){drawTargetGlow(a.o);drawCar3D(a.o,'#ff40c9','#ffd0f5')}else if(a.kind==='remote'){drawCar3D(a.o,'#65f7ff','#d7ffff');const label=project(a.o.x,a.o.y,24);x.fillStyle='#d7ffff';x.font='10px Consolas';x.textAlign='center';x.fillText(a.o.name||'DRIVER',label.x,label.y-5);x.textAlign='left'}else drawPed3D(a.o)}
  // Player car: rear chase-camera view, with a visible roof, rear glass, bumper and tires.
