@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEON TAG: Open City</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#070913;color:#e6faff;font-family:Consolas,monospace;display:flex;justify-content:center}.app{width:min(1100px,100%);padding:14px}header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}h1{margin:0;color:#ff4fd8;font-size:clamp(22px,3vw,32px);letter-spacing:2px;text-shadow:2px 2px #55236e}.sub{font-size:11px;color:#65f7ff;letter-spacing:1px;margin-top:5px}.hud{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}.stat{background:#0d1425;border:1px solid #29445c;padding:7px 11px;min-width:105px}.stat span{display:block;font-size:10px;color:#88a8c4;margin-bottom:4px}.stat strong{font-size:16px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px}canvas{width:100%;display:block;aspect-ratio:16/10;background:#090e1b;border:2px solid #244e67;image-rendering:auto;box-shadow:0 0 34px #00eaff55}aside{border:1px solid #243b53;background:#0b1020;padding:12px;min-width:0}h2{font-size:13px;color:#65f7ff;letter-spacing:1px;margin:0 0 10px}.panel{border-bottom:1px solid #243047;padding:0 0 12px;margin-bottom:12px;font-size:12px;line-height:1.55;color:#a9bfd0}.panel b{color:#fff}.pill{display:inline-block;padding:3px 6px;border:1px solid #ff4fd8;color:#ff91e6;font-size:10px;margin-bottom:8px}button{background:#ff4fd8;color:#160a20;border:0;padding:9px 10px;font:bold 12px Consolas;cursor:pointer}button:hover{background:#65f7ff}.btns{display:flex;gap:6px;flex-wrap:wrap}input{width:100%;background:#080c18;color:#eafaff;border:1px solid #31516a;padding:8px;font:12px Consolas;margin:5px 0 8px}.feed{height:94px;overflow:auto;color:#8fb1c7;font-size:10px;line-height:1.6}.feed div:first-child{color:#ff9be8}.bottom{font-size:11px;color:#9ab1c5;line-height:1.7;margin-top:9px}kbd{border:1px solid #31556d;background:#111a2a;padding:2px 5px;color:#65f7ff}.drive-controls{display:flex;gap:10px;margin-top:8px;justify-content:center}.drive-controls button{flex:1;max-width:180px;min-height:46px;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none}.drive-controls button:active{background:#65f7ff;transform:translateY(1px)}@media(max-width:760px){.layout{grid-template-columns:1fr}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.feed{height:70px}.drive-controls button{min-height:54px;font-size:16px}} 
+</style></head><body><main class="app">
+<header><div><h1>NEON TAG <span style="color:#65f7ff">// OPEN CITY</span></h1><div class="sub">DISTRICT 09 • NIGHT DRIVE NETWORK • STREET-LEVEL REBUILD</div></div><div class="pill">MULTIPLAYER-READY PROTOTYPE</div></header>
+<div class="hud">
+<div class="stat"><span>TAG SCORE</span><strong id="score">0</strong></div><div class="stat"><span>NEAREST RIVAL</span><strong id="near">—</strong></div><div class="stat"><span>VELOCITY</span><strong id="speed">0 km/h</strong></div><div class="stat"><span>NITRO</span><strong id="nitro">READY</strong></div><div class="stat"><span>ZONE</span><strong id="zone">NEON CORE</strong></div>
+</div>
+<div class="layout"><div><canvas id="game" width="800" height="500" aria-label="Street-level perspective cyberpunk driving game"></canvas><div class="drive-controls" aria-label="Driving controls"><button id="rev" type="button">◀ REV</button><button id="fwd" type="button">FWD ▶</button></div><div class="bottom"><b style="color:#65f7ff">DRIVE</b> <kbd>WASD</kbd> / <kbd>ARROWS</kbd> &nbsp; <kbd>SPACE</kbd> nitro &nbsp; <kbd>R</kbd> respawn<br>Explore the city, cut through alleys, dodge traffic, and tag the rival cars. Drive close to a rival to score a tag.</div></div>
+<aside><section><h2>NETWORK GARAGE</h2><div class="panel"><span class="pill">LOCAL SIMULATION</span><br>This prototype runs in your browser with AI drivers and traffic. Real online multiplayer needs a hosted game server; this build includes a room-code lobby mockup so the UI and flow can be tested.</div>
+<label for="playerName" style="font-size:11px;color:#8caec4">CALLSIGN</label><input id="playerName" maxlength="16" value="GHOST_09">
+<label for="room" style="font-size:11px;color:#8caec4">ROOM CODE</label><input id="room" maxlength="8" value="NEON09">
+<div class="btns"><button id="join">JOIN ROOM</button><button id="host">HOST ROOM</button></div><div id="network" class="panel" style="margin-top:10px">Offline free drive · 1 driver</div></section>
+<section><h2>RADIO / CITY FEED</h2><div id="feed" class="feed"><div>13:09 // Night network booted.</div><div>13:09 // Traffic AI online.</div><div>13:09 // Find the pink rivals.</div></div></section>
+<section><h2>MAP LEGEND</h2><div class="panel">▰ <span style="color:#65f7ff">Cyan</span> — your car<br>▰ <span style="color:#ff4fd8">Pink</span> — rivals / tag targets<br>▰ <span style="color:#ffcf72">Amber</span> — city traffic<br>▰ <span style="color:#a1ff9b">Green</span> — repair / boost cache</div><button id="reset">RESTART DRIVE ↻</button></section></aside></div>
+</main>
+<script>
+(()=>{
+const c=document.getElementById('game'),x=c.getContext('2d');x.imageSmoothingEnabled=false;
+const CW=800,CH=500,world={w:2400,h:1800},keys={};let player,cars,traffic,buildings,pedestrians,cache,particles,score,nitro,nitroCD,cam={x:0,y:0,a:-Math.PI/2},last=0,joined=false,room='NEON09',name='GHOST_09',elapsed=0;
+const ui={score:document.getElementById('score'),near:document.getElementById('near'),speed:document.getElementById('speed'),nitro:document.getElementById('nitro'),zone:document.getElementById('zone'),net:document.getElementById('network'),feed:document.getElementById('feed')};
+function rnd(a,b){return a+Math.random()*(b-a)}function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function log(s){let d=document.createElement('div');d.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' // '+s;ui.feed.prepend(d);while(ui.feed.children.length>7)ui.feed.lastChild.remove()}
+function reset(){
+ player={x:1200,y:900,a:-Math.PI/2,v:0};cam.a=player.a;score=0;nitro=0;nitroCD=0;elapsed=0;particles=[];
+ // City grid: long blocks separated by broad avenues and narrow alleys.
+ buildings=[];for(let row=0;row<7;row++)for(let col=0;col<10;col++){
+   let bx=col*235+35+rnd(-8,8),by=row*235+28+rnd(-8,8),w=rnd(105,165),h=rnd(95,165);
+   // central plaza and starting lane remain open
+   if(Math.abs(bx-1200)<150&&Math.abs(by-900)<150)continue;
+   buildings.push({x:bx,y:by,w,h,neon:Math.random()<.5?'#16ddec':'#ff40c9',seed:Math.random(),kind:Math.random()<.48?'shop':Math.random()<.5?'tower':'apartment'});
+ }
+ cars=Array.from({length:8},(_,i)=>({...roadSpawn(i),v:rnd(38,65),alive:true,id:i,tagged:false}));
+ traffic=Array.from({length:20},(_,i)=>({...roadSpawn(i),v:rnd(28,58),color:['#ffcf72','#a5a5ff','#ff8f69'][i%3]}));
+ pedestrians=Array.from({length:70},(_,i)=>({x:rnd(30,world.w-30),y:rnd(30,world.h-30),a:rnd(0,6.28),speed:rnd(8,17),turn:rnd(.5,3),shirt:['#ff4fd8','#65f7ff','#f6c76b','#a7ff9d','#c9a4ff'][i%5],skin:['#f3c7a1','#b97856','#e4b28a'][i%3],walk:Math.random()*10}));
+ cache=[{x:400,y:400},{x:2000,y:450},{x:400,y:1400},{x:1950,y:1450},{x:1200,y:250}].map(p=>({x:p[0],y:p[1],used:false}));
+ ui.score.textContent='0';log('Free-drive session reset.');
+}
+function collides(px,py,r=8){return buildings.some(b=>px+r>b.x&&px-r<b.x+b.w&&py+r>b.y&&py-r<b.y+b.h)}
+function carDraw(o,color,accent,size=1){
+ x.save();x.translate(Math.round(o.x-cam.x),Math.round(o.y-cam.y));x.rotate(o.a);x.scale(size,size);
+ x.globalAlpha=.2;x.fillStyle=color;x.fillRect(-13,-9,26,18);x.globalAlpha=1;
+ x.fillStyle='#050914';x.fillRect(-11,-8,22,16);x.fillStyle='#070a13';x.fillRect(-9,-7,18,14);
+ x.fillStyle=color;x.fillRect(-8,-7,16,14);x.fillStyle='#182b42';x.fillRect(-6,-5,12,10);
+ x.fillStyle=accent;x.fillRect(-4,-4,8,8);x.fillStyle='#0a1424';x.fillRect(-3,-3,6,6);
+ x.fillStyle='#f5ffff';x.fillRect(5,-4,4,8);x.fillStyle='#ffeeb0';x.fillRect(-10,-6,3,4);x.fillRect(-10,2,3,4);
+ x.fillStyle='#ff465f';x.fillRect(-10,-5,2,3);x.fillRect(-10,3,2,3);
+ // tiny roof stripe and pixel reflections
+ x.fillStyle='#e6fcff';x.fillRect(-1,-5,2,10);x.fillStyle=color;x.fillRect(-5,-6,5,2);
+ x.fillStyle='#202638';x.fillRect(-6,-9,4,2);x.fillRect(2,-9,4,2);x.fillRect(-6,7,4,2);x.fillRect(2,7,4,2);x.restore();
+}
+function update(dt){
+ elapsed+=dt;let up=keys.w||keys.arrowup,down=keys.s||keys.arrowdown,left=keys.a||keys.arrowleft,right=keys.d||keys.arrowright;
+ if(keys[' ']&&nitroCD<=0){nitro=.8;nitroCD=4;log('Nitro burst engaged.')}
+ nitro=Math.max(0,nitro-dt);nitroCD=Math.max(0,nitroCD-dt);
+ let max=nitro>0?260:165;if(up)player.v=Math.min(max,player.v+185*dt);else if(down)player.v=Math.max(-60,player.v-145*dt);else player.v*=Math.pow(.94,dt*60);
+ player.a+=((right?1:0)-(left?1:0))*2.4*dt*(.35+Math.min(1,Math.abs(player.v)/80))*(player.v<0?-1:1);
+ let nx=player.x+Math.cos(player.a)*player.v*dt,ny=player.y+Math.sin(player.a)*player.v*dt;
+ if(nx<10||nx>world.w-10||collides(nx,player.y)){player.v*=-.25}else player.x=nx;
+ if(ny<10||ny>world.h-10||collides(player.x,ny)){player.v*=-.25}else player.y=ny;
+ for(let r of cars){if(!r.alive)continue;
+ let d=Math.hypot(player.x-r.x,player.y-r.y);
+ // Rivals patrol the same lane network as traffic; they no longer steer directly through buildings.
+ advanceRoadAgent(r,dt,true);
+ r.a = r.a;
+  if(d<17){r.alive=false;score++;ui.score.textContent=score;for(let i=0;i<12;i++)particles.push({x:r.x,y:r.y,vx:rnd(-90,90),vy:rnd(-90,90),life:.5,color:'#ff4fd8'});log('Rival tagged! +1 score.');if(score%3===0)log('Street rep rising. Keep hunting.')}
+ }
+ for(let t of traffic){advanceRoadAgent(t,dt,false);
+   if(Math.hypot(player.x-t.x,player.y-t.y)<15){player.v*=.75;t.v*=.96;}
+ }
+ for(let ped of pedestrians){
+   ped.turn-=dt;ped.walk+=dt*7;
+   if(ped.turn<=0){ped.a+=rnd(-1.5,1.5);ped.turn=rnd(.7,2.8)}
+   let qx=ped.x+Math.cos(ped.a)*ped.speed*dt,qy=ped.y+Math.sin(ped.a)*ped.speed*dt;
+   if(qx<8||qx>world.w-8||collides(qx,ped.y,3)){ped.a=Math.PI-ped.a;qx=ped.x}
+   if(qy<8||qy>world.h-8||collides(ped.x,qy,3)){ped.a=-ped.a;qy=ped.y}
+   if(Math.hypot(player.x-ped.x,player.y-ped.y)<18){player.v*=.88;ped.a+=Math.PI}
+   ped.x=qx;ped.y=qy;
+ }
+ for(let p of cache)if(!p.used&&Math.hypot(player.x-p.x,player.y-p.y)<24){p.used=true;nitro=1.2;nitroCD=0;log('Boost cache collected.')}
+ particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt});particles=particles.filter(p=>p.life>0);
+ cam.x=clamp(player.x-CW/2,0,world.w-CW);cam.y=clamp(player.y-CH/2,0,world.h-CH);
+ // Smooth chase-camera yaw: the world stays attached to world coordinates and the view eases into turns instead of snapping/whipping the road grid.
+ const angleDelta=Math.atan2(Math.sin(player.a-cam.a),Math.cos(player.a-cam.a));cam.a+=angleDelta*(1-Math.exp(-dt*3.2));
+ let near=Infinity;for(let r of cars)if(r.alive)near=Math.min(near,Math.hypot(player.x-r.x,player.y-r.y));
+ ui.near.textContent=near===Infinity?'CLEAR':Math.round(near)+' m';ui.speed.textContent=Math.round(Math.abs(player.v)*1.25)+' km/h';ui.nitro.textContent=nitro>0?'ACTIVE':nitroCD>0?nitroCD.toFixed(1)+'s':'READY';
+ let z=player.x<800?'WEST END':player.x>1600?'EAST DOCKS':player.y<600?'UPPER GRID':player.y>1250?'LOWER WARD':'NEON CORE';ui.zone.textContent=z;
+}
+function project(wx,wy,z=0){
+ // A single street-level camera model: every ground object shares the same
+ // ground plane, and height moves it upward from that ground point.
+ const dx=wx-player.x,dy=wy-player.y;
+ const ca=Math.cos(cam.a),sa=Math.sin(cam.a);
+ const lateral=-dx*sa+dy*ca;
+ const forward=dx*ca+dy*sa;
+ const cameraDistance=150, focal=420, cameraHeight=82;
+ const depth=Math.max(24,forward+cameraDistance);
+ const scale=focal/depth;
+ const groundY=CH*.255+(focal*cameraHeight)/depth;
+ return {x:CW/2+lateral*scale,y:groundY-z*scale,groundY,scale,depth:forward,forward,lateral};
+}
+function poly(points,fill,stroke=null){
+ x.beginPath();points.forEach((p,i)=>{if(i===0)x.moveTo(p.x,p.y);else x.lineTo(p.x,p.y)});x.closePath();x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.lineWidth=1;x.stroke()}
+}
+function drawBuilding3D(b){
+ const corners=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]];
+ const depths=corners.map(p=>project(p[0],p[1],0));
+ // Skip blocks crossing the camera plane; clamped depth here caused inverted/transparent walls.
+ if(depths.some(p=>p.forward < -95))return;
+ const ht=b.kind==='tower'?rndStatic(b.seed,70,120):b.kind==='shop'?22:44+rndStatic(b.seed,0,16);
+ const base=corners.map(p=>project(p[0],p[1],0)),top=corners.map(p=>project(p[0],p[1],ht));
+ // Draw every wall face opaquely, back-to-front, then the roof. This prevents see-through corners.
+ const faces=[];
+ for(let i=0;i<4;i++){const j=(i+1)%4;faces.push({pts:[base[i],base[j],top[j],top[i]],depth:(depths[i].forward+depths[j].forward)/2,fill:['#202a40','#172238','#111a2e','#253047'][i]});}
+ faces.sort((a,b)=>b.depth-a.depth);for(const f of faces)poly(f.pts,f.fill,'#3b4863');
+ poly(top,b.kind==='shop'?'#30384e':'#252e45','#59617a');
+ // Window panels on all visible sides, kept inset and opaque.
+ for(let i=0;i<4;i++){
+   const j=(i+1)%4, p0=corners[i],p1=corners[j];
+   const edge=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]);
+   const n=Math.max(2,Math.floor(edge/22));
+   for(let row=0;row<Math.max(2,Math.floor(ht/13));row++)for(let col=0;col<n;col++){
+     const t=.08+(col+.15)/(n)*.84, wx=p0[0]+(p1[0]-p0[0])*t, wy=p0[1]+(p1[1]-p0[1])*t;
+     const z=7+row*11;if(z+5>=ht)continue;
+     const ex=(p1[0]-p0[0])/edge*4,ey=(p1[1]-p0[1])/edge*4;
+     const q=[project(wx-ex,wy-ey,z),project(wx+ex,wy+ey,z),project(wx+ex,wy+ey,z+5),project(wx-ex,wy-ey,z+5)];
+     x.save();x.shadowColor=Math.sin(wx*wy+b.seed+row)>-.1?'#00eaff':'#ff31d0';x.shadowBlur=5;poly(q,Math.sin(wx*wy+b.seed+row)>-.1?'#49cbd8':'#b94391');x.restore();
+   }
+ }
+ // Roof rim and rooftop equipment are drawn last, fully opaque.
+ poly([top[0],top[1],{x:top[1].x,y:top[1].y+2},{x:top[0].x,y:top[0].y+2}],b.neon);
+ const roof= [[.22,.22],[.65,.22],[.65,.52],[.22,.52]].map(([u,v])=>project(b.x+b.w*u,b.y+b.h*v,ht+2));poly(roof,'#111a2b','#52607a');
+ if(b.kind==='shop'){const sign=[project(b.x+8,b.y+b.h-5,14),project(b.x+b.w-8,b.y+b.h-5,14),project(b.x+b.w-8,b.y+b.h-5,20),project(b.x+8,b.y+b.h-5,20)];poly(sign,b.neon);}
+}
+function rndStatic(seed,a,b){let v=Math.sin(seed*127.1+311.7)*43758.5453;v-=Math.floor(v);return a+(b-a)*v}
+function nearestRoad(v){return Math.round(v/235)*235}
+function roadSpawn(i){
+ const horizontal=Math.random()<.5, lane=(Math.random()<.5?-1:1)*13;
+ const cross=clamp(nearestRoad(rnd(60,horizontal?world.h-60:world.w-60))+lane,12,(horizontal?world.h:world.w)-12);
+ const along=rnd(45,horizontal?world.w-45:world.h-45);
+ return horizontal?{x:along,y:cross,a:Math.random()<.5?0:Math.PI,axis:'h',lane:cross,v:rnd(34,62),turn:rnd(1,3)}:{x:cross,y:along,a:Math.random()<.5?Math.PI/2:-Math.PI/2,axis:'v',lane:cross,v:rnd(34,62),turn:rnd(1,3)};
+}
+function advanceRoadAgent(o,dt,isRival=false){
+ // Agents stay centered in a lane and only turn at actual grid intersections.
+ o.turn-=dt;
+ const speed=o.v||45;
+ if(o.axis==='h'){o.y+=(o.lane-o.y)*Math.min(1,dt*5);o.x+=Math.cos(o.a)*speed*dt;
+   const ix=nearestRoad(o.x);if(o.turn<=0&&Math.abs(o.x-ix)<speed*dt+5){o.x=ix;if(Math.random()<(isRival?.48:.32)){o.axis='v';o.lane=clamp(nearestRoad(o.x)+(Math.random()<.5?-13:13),12,world.w-12);o.a=Math.random()<.5?Math.PI/2:-Math.PI/2;}o.turn=rnd(1.5,4);}
+ }else{o.x+=(o.lane-o.x)*Math.min(1,dt*5);o.y+=Math.sin(o.a)*speed*dt;
+   const iy=nearestRoad(o.y);if(o.turn<=0&&Math.abs(o.y-iy)<speed*dt+5){o.y=iy;if(Math.random()<(isRival?.48:.32)){o.axis='h';o.lane=clamp(nearestRoad(o.y)+(Math.random()<.5?-13:13),12,world.h-12);o.a=Math.random()<.5?0:Math.PI;}o.turn=rnd(1.5,4);}
+ }
+ if(o.x<25||o.x>world.w-25){o.x=clamp(o.x,25,world.w-25);o.a=Math.PI-o.a;o.turn=rnd(1,3)}
+ if(o.y<25||o.y>world.h-25){o.y=clamp(o.y,25,world.h-25);o.a=-o.a;o.turn=rnd(1,3)}
+}
+function drawTargetGlow(o){
+ const p=project(o.x,o.y,0),sc=clamp(p.scale,.12,1.6);
+ if(p.forward < -110 || p.forward > 1100 || Math.abs(p.lateral)>1250)return;
+ const pulse=.72+.28*Math.sin(elapsed*6+o.id);
+ x.save();x.globalAlpha=.78*pulse;x.strokeStyle='#ff4fd8';x.fillStyle='#ff40c9';
+ x.shadowColor='#ff40c9';x.shadowBlur=30*sc;
+ x.lineWidth=Math.max(1,2.2*sc);x.beginPath();
+ x.ellipse(p.x,p.groundY+1,Math.max(3,19*sc),Math.max(2,8*sc),0,0,Math.PI*2);x.stroke();
+ x.globalAlpha=.18*pulse;x.beginPath();x.ellipse(p.x,p.groundY+1,Math.max(2,14*sc),Math.max(1,5*sc),0,0,Math.PI*2);x.fill();
+ // A small floating neon marker keeps targets identifiable when the road is busy.
+ x.shadowBlur=12*sc;x.globalAlpha=.9*pulse;x.fillStyle='#ffb9f0';
+ x.fillRect(p.x-2.2*sc,p.y-29*sc,4.4*sc,4.4*sc);
+ x.fillStyle='#ff40c9';x.fillRect(p.x-1.2*sc,p.y-27.8*sc,2.4*sc,2.4*sc);
+ x.restore();
+}
+function drawCar3D(o,color,accent,playerCar=false){
+ const p=project(o.x,o.y,0),sc=clamp(p.scale,.12,1.6);
+ if(p.forward < -110 || p.forward > 1100 || Math.abs(p.lateral)>1250)return;
+ // Construct the vehicle as projected 3D boxes on the world ground plane. Its visible end/side
+ // naturally changes with heading relative to the camera, rather than using one top-down sprite.
+ function wp(lon,lat,z=0){return [o.x+Math.cos(o.a)*lon-Math.sin(o.a)*lat,o.y+Math.sin(o.a)*lon+Math.cos(o.a)*lat,z]}
+ function pp(v){return project(v[0],v[1],v[2])}
+ function face(vs,fill,stroke){poly(vs.map(pp),fill,stroke)}
+ const L=15,W=8,H=7;
+ const base=[wp(-L,-W),wp(L,-W),wp(L,W),wp(-L,W)];
+ const top=base.map(v=>[v[0],v[1],H]);
+ x.save();
+ const shadow=project(o.x,o.y,0);x.globalAlpha=.35;x.fillStyle='#000';x.beginPath();x.ellipse(shadow.x,shadow.groundY+1,Math.max(2,13*sc),Math.max(1,5*sc),0,0,Math.PI*2);x.fill();x.globalAlpha=1;
+ // Four side panels: visible front, rear and side views all come from camera projection.
+ const faces=[];for(let i=0;i<4;i++){const j=(i+1)%4;const a=project(base[i][0],base[i][1],0),b=project(base[j][0],base[j][1],0);faces.push({pts:[base[i],base[j],top[j],top[i]],depth:(a.forward+b.forward)/2,idx:i});}
+ faces.sort((a,b)=>b.depth-a.depth);
+ for(const f of faces){let fc=f.idx===0?'#14263a':f.idx===1?color:f.idx===2?'#0d1828':color;face(f.pts,fc,'#050914');}
+ face(top,color,'#6a8198');
+ // Raised cabin box, set forward on the chassis; glass panels have opaque dark fills.
+ const cabinBase=[wp(-5,-5, H),wp(6,-5,H),wp(6,5,H),wp(-5,5,H)];
+ const cabinTop=cabinBase.map(v=>[v[0],v[1],H+5]);
+ for(let i=0;i<4;i++){let j=(i+1)%4;face([cabinBase[i],cabinBase[j],cabinTop[j],cabinTop[i]],'#10263a','#263f56');}
+ face(cabinTop,'#183b52','#6d9db4');
+ // Wheels are grounded and sit outside the body at all four corners.
+ for(const lon of [-9,9])for(const lat of [-9,9]){const q=pp(wp(lon,lat,1));x.fillStyle='#03050a';x.fillRect(q.x-2.3*sc,q.y-3*sc,4.6*sc,7*sc);x.fillStyle='#39485b';x.fillRect(q.x-1.1*sc,q.y-2*sc,2.2*sc,4*sc);}
+ // Headlights at the forward end, tail lamps at the rear end.
+ for(const lat of [-5.5,5.5]){let h=pp(wp(14.5,lat,2));x.fillStyle='#ffe8ad';x.shadowColor='#ffe8ad';x.shadowBlur=3*sc;x.fillRect(h.x-1.5*sc,h.y-1.5*sc,3*sc,3*sc);let t=pp(wp(-14.5,lat,2));x.shadowColor='#ff426f';x.fillStyle='#ff426f';x.fillRect(t.x-1.8*sc,t.y-1.5*sc,3.6*sc,3*sc);}
+ x.shadowBlur=0;x.restore();
+}
+function drawPed3D(ped){
+ const p=project(ped.x,ped.y,0),sc=clamp(p.scale,.16,1.5);
+ if(p.forward < -35 || p.forward > 760 || Math.abs(p.lateral)>850)return;
+ x.save();x.globalAlpha=.4;x.fillStyle='#000';x.beginPath();x.ellipse(p.x,p.groundY+1,4.5*sc,2.2*sc,0,0,Math.PI*2);x.fill();x.globalAlpha=1;
+ x.translate(p.x,p.y);x.scale(sc,sc);
+ const step=Math.sin(ped.walk)>0?2:-2;
+ // Legs and shoes
+ x.fillStyle='#070b13';x.fillRect(-3,-4,3,5);x.fillRect(1+step,-4,3,5);
+ x.fillStyle='#596176';x.fillRect(-4,0,4,2);x.fillRect(1+step,0,4,2);
+ // Arms, jacket and backpack silhouette
+ x.fillStyle='#151d30';x.fillRect(-5,-11,2,7);x.fillRect(3,-11,2,7);
+ x.fillStyle=ped.shirt;x.fillRect(-3,-13,6,9);
+ x.fillStyle='#d8faff';x.fillRect(-1,-12,2,5);
+ x.fillStyle='#101827';x.fillRect(-4,-12,2,5);
+ // Head, hair and tiny neon rim light
+ x.fillStyle=ped.skin;x.fillRect(-2,-18,4,5);
+ x.fillStyle='#252037';x.fillRect(-3,-19,6,2);x.fillRect(-3,-17,1,2);
+ x.fillStyle=ped.shirt;x.fillRect(-4,-13,1,4);x.fillRect(3,-13,1,4);
+ x.restore();
+}
+function draw(){
+ x.fillStyle='#070b17';x.fillRect(0,0,CW,CH);
+ // Atmospheric skyline and cyberpunk horizon
+ let grad=x.createLinearGradient(0,0,0,CH);grad.addColorStop(0,'#070a19');grad.addColorStop(.55,'#10152b');grad.addColorStop(1,'#17142b');x.fillStyle=grad;x.fillRect(0,0,CW,CH);
+ // distant skyline silhouettes
+ for(let i=0;i<24;i++){let bx=(i*47+((cam.x*.07)%47));let bh=35+(i*37%95);x.fillStyle=i%3===0?'#17213b':'#10172c';x.fillRect(bx,CH*.265-bh*.35,27,bh);x.fillStyle=i%2?'#19dce9':'#ff40c9';for(let yy=CH*.265-bh*.35+8;yy<CH*.265+bh*.4;yy+=10)x.fillRect(bx+5,yy,3,3)}
+ // Ground plane: asphalt and every marking are fixed to world-space coordinates. The chase camera yaw eases separately from steering so the street grid doesn't snap around when the car turns.
+ const horizon=CH*.265;
+ x.fillStyle='#050711';x.fillRect(0,horizon,CW,CH);x.save();x.shadowColor='#ff35d4';x.shadowBlur=22;x.fillStyle='#ff35d4';x.fillRect(0,horizon,CW,2);x.restore();
+ function groundQuad(points,fill,stroke=null){const q=points.map(p=>project(p[0],p[1],0));poly(q,fill,stroke)}
+ const spacing=235, roadW=66;
+ const minX=Math.max(0,Math.floor((player.x-1000)/spacing)*spacing),maxX=Math.min(world.w,player.x+1000);
+ const minY=Math.max(0,Math.floor((player.y-1000)/spacing)*spacing),maxY=Math.min(world.h,player.y+1000);
+ // Asphalt ribbons aligned with the city's fixed orthogonal street grid.
+ for(let wx=minX;wx<=maxX;wx+=spacing){
+   groundQuad([[wx-roadW/2,minY],[wx+roadW/2,minY],[wx+roadW/2,maxY],[wx-roadW/2,maxY]],'#050711');
+   for(let wy=minY+22;wy<maxY;wy+=54){
+     groundQuad([[wx-2,wy],[wx+2,wy],[wx+2,wy+23],[wx-2,wy+23]],'#ffd43b');
+   }
+ }
+ for(let wy=minY;wy<=maxY;wy+=spacing){
+   groundQuad([[minX,wy-roadW/2],[maxX,wy-roadW/2],[maxX,wy+roadW/2],[minX,wy+roadW/2]],'#050711');
+   for(let wx=minX+22;wx<maxX;wx+=54){
+     groundQuad([[wx,wy-2],[wx+23,wy-2],[wx+23,wy+2],[wx,wy+2]],'#ffd43b');
+   }
+ }
+ // draw nearby buildings back-to-front
+ const visible=buildings.map(b=>({b,p:project(b.x+b.w/2,b.y+b.h/2,0),corners:[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(q=>project(q[0],q[1],0))})).filter(o=>o.p.forward>-65&&o.p.forward<1050&&Math.abs(o.p.lateral)<1250&&o.corners.every(q=>q.forward>-95)).sort((a,b)=>b.p.forward-a.p.forward);
+ for(let o of visible)drawBuilding3D(o.b);
+ // boost caches
+ for(let p of cache)if(!p.used){let q=project(p.x,p.y,2);x.fillStyle='#a1ff9b';x.fillRect(q.x-4*q.scale,q.y-4*q.scale,8*q.scale,8*q.scale)}
+ // traffic, rivals and pedestrians in perspective
+ const actors=[];
+ for(let t of traffic){let p=project(t.x,t.y,0);if(p.forward>-45&&p.forward<900&&Math.abs(p.lateral)<850)actors.push({o:t,p,kind:'traffic'})}
+ for(let r of cars)if(r.alive){let p=project(r.x,r.y,0);if(p.forward>-45&&p.forward<1000&&Math.abs(p.lateral)<900)actors.push({o:r,p,kind:'rival'})}
+ for(let ped of pedestrians){let p=project(ped.x,ped.y,0);if(p.forward>-35&&p.forward<700&&Math.abs(p.lateral)<760)actors.push({o:ped,p,kind:'ped'})}
+ actors.sort((a,b)=>b.p.forward-a.p.forward);
+ for(let a of actors){if(a.kind==='traffic')drawCar3D(a.o,a.o.color,'#342b30');else if(a.kind==='rival'){drawTargetGlow(a.o);drawCar3D(a.o,'#ff40c9','#ffd0f5')}else drawPed3D(a.o)}
+ // Player car: rear chase-camera view, with a visible roof, rear glass, bumper and tires.
+ // The car is drawn in screen space (not as a flat map icon) so it reads as a vehicle on the road.
+ const px=CW*.5, py=CH*.765;
+ x.save();
+ // ground contact shadow and cyan underglow
+ x.globalAlpha=.48;x.fillStyle='#000';x.beginPath();x.ellipse(px,py+27,48,16,0,0,Math.PI*2);x.fill();
+ x.globalAlpha=.22;x.fillStyle='#00eaff';x.beginPath();x.ellipse(px,py+22,43,12,0,0,Math.PI*2);x.fill();x.globalAlpha=1;
+ // rear tires sit outside the body and below the wheel arches
+ x.fillStyle='#03050b';poly([{x:px-39,y:py-3},{x:px-29,y:py-13},{x:px-27,y:py+24},{x:px-38,y:py+20}],'#03050b');
+ poly([{x:px+29,y:py-13},{x:px+39,y:py-3},{x:px+38,y:py+20},{x:px+27,y:py+24}],'#03050b');
+ x.fillStyle='#36445a';x.fillRect(px-36,py+5,5,12);x.fillRect(px+31,py+5,5,12);
+ // rear body silhouette and flared shoulders
+ poly([{x:px-20,y:py-48},{x:px+20,y:py-48},{x:px+31,y:py-24},{x:px+39,y:py+15},{x:px+31,y:py+28},{x:px-31,y:py+28},{x:px-39,y:py+15},{x:px-31,y:py-24}],'#07101e','#65f7ff');
+ poly([{x:px-19,y:py-43},{x:px+19,y:py-43},{x:px+27,y:py-20},{x:px+29,y:py+3},{x:px-29,y:py+3},{x:px-27,y:py-20}],'#1c3851','#3d7890');
+ // sloped roof and rear windshield, clearly distinct from the trunk
+ poly([{x:px-18,y:py-39},{x:px+18,y:py-39},{x:px+24,y:py-20},{x:px-24,y:py-20}],'#0a1829','#65f7ff');
+ poly([{x:px-22,y:py-17},{x:px+22,y:py-17},{x:px+27,y:py+2},{x:px-27,y:py+2}],'#10263a','#315d78');
+ // rear lights, trunk seam, bumper and plate
+ x.fillStyle='#ff3d83';x.shadowColor='#ff3d83';x.shadowBlur=12;x.fillRect(px-29,py+5,13,5);x.fillRect(px+16,py+5,13,5);x.shadowBlur=0;
+ x.fillStyle='#ffb4d2';x.fillRect(px-27,py+6,8,2);x.fillRect(px+19,py+6,8,2);
+ x.strokeStyle='#527b91';x.lineWidth=1.5;x.beginPath();x.moveTo(px-25,py+12);x.lineTo(px+25,py+12);x.stroke();
+ poly([{x:px-10,y:py+15},{x:px+10,y:py+15},{x:px+8,y:py+21},{x:px-8,y:py+21}],'#b7faff','#65f7ff');
+ x.fillStyle='#65f7ff';x.fillRect(px-31,py+24,62,3);
+ // twin exhausts and bright road-facing cyan highlights
+ x.fillStyle='#9afaff';x.fillRect(px-23,py+29,8,3);x.fillRect(px+15,py+29,8,3);
+ x.globalAlpha=.7;x.fillStyle='#65f7ff';x.beginPath();x.moveTo(px-28,py+28);x.lineTo(px-43,py+45);x.lineTo(px-22,py+34);x.closePath();x.fill();x.beginPath();x.moveTo(px+28,py+28);x.lineTo(px+43,py+45);x.lineTo(px+22,py+34);x.closePath();x.fill();x.globalAlpha=1;
+ x.restore();
+ // mini map
+ const mw=130,mh=98,mx=CW-mw-10,my=10;x.globalAlpha=.88;x.fillStyle='#060a14';x.fillRect(mx,my,mw,mh);x.strokeStyle='#3b6178';x.strokeRect(mx,my,mw,mh);
+ for(let b of buildings){x.fillStyle='#263047';x.fillRect(mx+b.x/world.w*mw,my+b.y/world.h*mh,Math.max(1,b.w/world.w*mw),Math.max(1,b.h/world.h*mh))}
+ for(let r of cars)if(r.alive){x.fillStyle='#ff4fd8';x.fillRect(mx+r.x/world.w*mw-1,my+r.y/world.h*mh-1,3,3)}
+ x.fillStyle='#65f7ff';x.fillRect(mx+player.x/world.w*mw-2,my+player.y/world.h*mh-2,5,5);x.globalAlpha=1;
+ x.fillStyle='#65f7ff';x.font='10px Consolas';x.fillText('DISTRICT MAP',mx+5,my+mh+12);
+ // Speed HUD vignette and scanlines
+ x.globalAlpha=.08;x.fillStyle='#9dfaff';for(let y=0;y<CH;y+=4)x.fillRect(0,y,CW,1);x.globalAlpha=1;
+}
+function frame(t){let dt=Math.min(.035,(t-last)/1000||0);last=t;update(dt);draw();requestAnimationFrame(frame)}
+window.addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys[k]=true;if(k==='r'){reset();log('Respawned at Neon Core.')}});window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+// Hold-to-drive controls work with mouse, touch, pen, and keyboard. Always release on cancel/blur.
+function bindDriveButton(id,key){const el=document.getElementById(id);const press=e=>{e.preventDefault();keys[key]=true;try{el.setPointerCapture(e.pointerId)}catch(_){}};const release=e=>{if(e)e.preventDefault();keys[key]=false;};el.addEventListener('pointerdown',press);['pointerup','pointercancel','lostpointercapture','pointerleave'].forEach(type=>el.addEventListener(type,release));el.addEventListener('contextmenu',e=>e.preventDefault());}
+bindDriveButton('fwd','w');bindDriveButton('rev','s');window.addEventListener('blur',()=>{keys.w=false;keys.s=false;});
+document.getElementById('join').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=(document.getElementById('room').value.trim()||'NEON09').toUpperCase();joined=true;ui.net.textContent='Joined room '+room+' as '+name+'. Local AI session active; no remote players connected.';log(name+' joined room '+room+'.');};
+document.getElementById('host').onclick=()=>{name=document.getElementById('playerName').value.trim()||'GHOST_09';room=Math.random().toString(36).slice(2,8).toUpperCase();document.getElementById('room').value=room;joined=true;ui.net.textContent='Room '+room+' created locally. Share-code UI demo only — no public server is running.';log(name+' hosted room '+room+'.');};
+document.getElementById('reset').onclick=reset;
+reset();requestAnimationFrame(frame);
+})();
+</script></body></html>
